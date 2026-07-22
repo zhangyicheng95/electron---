@@ -1,79 +1,63 @@
-# electron-vite-react
+# 下载神器
 
-[![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite)
-![GitHub stars](https://img.shields.io/github/stars/electron-vite/electron-vite-react?color=fa6470)
-![GitHub issues](https://img.shields.io/github/issues/electron-vite/electron-vite-react?color=d8b22d)
-![GitHub license](https://img.shields.io/github/license/electron-vite/electron-vite-react)
-[![Required Node.js >= 20.19.0 || >= 22.12.0](https://img.shields.io/static/v1?label=node&message=%3E=20.19.0%20||%20%3E=22.12.0&logo=node.js&color=3f893e)](https://nodejs.org/about/releases)
+基于 Electron + Vite + React 的汽水音乐批量下载桌面应用。启动后先进入卡密授权页，验证通过后再使用下载功能。
 
 English | [简体中文](README.zh-CN.md)
 
-## Overview
+## Features
 
-- Ready out of the box.
-- Based on the official [template-react-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts).
-- Supports Electron and Node.js APIs in the renderer process.
-- Supports C/C++ native addons.
-- Includes debugger configuration.
-- Easy to extend to multiple windows.
+- Card-key gate before accessing the downloader
+- Batch parse Qishui / Douyin Music share links
+- Preview, single download, and ZIP batch download
+- Packaged app name: **下载神器**
+- One-command packaging for Windows and macOS
 
 ## Quick Start
 
 ```sh
-# clone the project
-git clone https://github.com/electron-vite/electron-vite-react.git
-
-# enter the project directory
-cd electron-vite-react
-
 # install dependencies
-pnpm install
+npm install
 
-# start development
-pnpm dev
+# start development (opens the auth page)
+npm run dev
 ```
 
-## Available Scripts
+Card keys can be configured in `public/qishui-auth.html` → `VALID_KEYS`.
 
-- `pnpm dev`: start the Vite dev server.
-- `pnpm build`: build the renderer and package the app with electron-builder.
-- `pnpm preview`: preview the production web build locally.
-- `pnpm test`: run Vitest unit tests.
-- `pnpm test:e2e`: build the test mode bundle and run Playwright tests.
-- `pnpm typecheck`: run the TypeScript type checker.
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite + Electron in development |
+| `npm run build` | Build and package for the current platform |
+| `npm run build:win` | Package Windows x64 installer (NSIS) |
+| `npm run build:mac` | Package macOS artifacts (dmg / zip) |
+| `npm run build:all` | Package Windows + macOS in one go |
+| `npm run preview` | Preview the production web build |
+| `npm run typecheck` | Run TypeScript type check |
+
+Build output goes to `release/<version>/`, for example:
+
+- Windows: `下载神器_0.0.1.exe`
+- macOS: `下载神器_0.0.1.dmg`
 
 ## Project Structure
 
 ```tree
-├── build/            Packaging assets
-├── dist-electron/    Compiled Electron output
-├── electron/         Main-process and preload source
-│   ├── main/
+├── build/                     Packaging assets (icons)
+├── electron/                  Main process & preload
+│   ├── main/                  Window entry, CDN Referer rewrite
 │   └── preload/
-├── public/           Static assets
-├── src/              Renderer source code
-│   ├── components/
-│   │   └── update/
-│   ├── demos/
-│   └── type/
-└── test/             Unit and end-to-end tests
-    └── e2e/
+├── public/
+│   ├── qishui-auth.html       Card-key auth page (app entry)
+│   └── qishui-downloader.html Downloader page
+├── src/                       React renderer (template leftovers)
+├── electron-builder.json      productName: 下载神器
+└── release/                   Packaged installers
 ```
 
-Files under `electron/` are compiled into `dist-electron/`.
+## Notes
 
-## Security Note
-
-The `renderer: {}` preset in `vite.config.ts` is only a Vite adapter that polyfills Electron, Node.js APIs and native modules for the renderer process. It is not the same as enabling Node integration. If you want direct Node.js access in the renderer, enable `nodeIntegration` in the `BrowserWindow` webPreferences in the main process and review the security impact carefully.
-
-## Features
-
-1. Electron auto update with docs in [src/components/update/README.md](src/components/update/README.md).
-2. Vitest unit tests and Playwright end-to-end tests.
-3. TailwindCSS v4.
-
-## Resources
-
-- Auto-update docs: [English](src/components/update/README.md) | [简体中文](src/components/update/README.zh-CN.md)
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+- Auth state is stored in `sessionStorage` for the current session only.
+- Douyin CDN enforces Referer checks; the Electron main process rewrites media request headers so preview/download works inside the app.
+- For personal / authorized backup use only.

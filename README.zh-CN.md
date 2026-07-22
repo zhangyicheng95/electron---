@@ -1,79 +1,63 @@
-# electron-vite-react
+# 下载神器
 
-[![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite)
-![GitHub stars](https://img.shields.io/github/stars/electron-vite/electron-vite-react?color=fa6470)
-![GitHub issues](https://img.shields.io/github/issues/electron-vite/electron-vite-react?color=d8b22d)
-![GitHub license](https://img.shields.io/github/license/electron-vite/electron-vite-react)
-[![Required Node.js >= 20.19.0 || >= 22.12.0](https://img.shields.io/static/v1?label=node&message=%3E=20.19.0%20||%20%3E=22.12.0&logo=node.js&color=3f893e)](https://nodejs.org/about/releases)
+基于 Electron + Vite + React 的汽水音乐批量下载桌面应用。启动后先进入卡密授权页，验证通过后再使用下载功能。
 
 [English](README.md) | 简体中文
 
-## 概览
+## 功能
 
-- 开箱即用。
-- 基于官方的 [template-react-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts)。
-- 支持在渲染进程中使用 Electron 和 Node.js API。
-- 支持 C/C++ 原生模块。
-- 包含调试配置。
-- 易于扩展为多窗口应用。
+- 卡密验证后进入下载页
+- 支持批量解析汽水 / 抖音音乐分享链接
+- 支持试听、单曲下载、批量打包 ZIP
+- 安装后软件名：**下载神器**
+- 支持一键打包 Windows / macOS
 
 ## 快速开始
 
 ```sh
-# 克隆项目
-git clone https://github.com/electron-vite/electron-vite-react.git
-
-# 进入项目目录
-cd electron-vite-react
-
 # 安装依赖
-pnpm install
+npm install
 
-# 启动开发环境
-pnpm dev
+# 启动开发环境（默认打开卡密页）
+npm run dev
 ```
+
+卡密可在 `public/qishui-auth.html` 的 `VALID_KEYS` 中配置。
 
 ## 可用脚本
 
-- `pnpm dev`：启动 Vite 开发服务器。
-- `pnpm build`：构建渲染进程并使用 electron-builder 打包应用。
-- `pnpm preview`：本地预览生产构建结果。
-- `pnpm test`：运行 Vitest 单元测试。
-- `pnpm test:e2e`：构建测试模式产物并运行 Playwright 测试。
-- `pnpm typecheck`：运行 TypeScript 类型检查。
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动开发环境 |
+| `npm run build` | 构建并打包当前平台 |
+| `npm run build:win` | 打包 Windows x64 安装包（NSIS） |
+| `npm run build:mac` | 打包 macOS（dmg / zip） |
+| `npm run build:all` | 一键打包 Windows + macOS |
+| `npm run preview` | 本地预览生产构建 |
+| `npm run typecheck` | TypeScript 类型检查 |
+
+打包产物输出到 `release/<version>/`，例如：
+
+- Windows：`下载神器_0.0.1.exe`
+- macOS：`下载神器_0.0.1.dmg`
 
 ## 项目结构
 
 ```tree
-├── build/            打包资源
-├── dist-electron/    编译后的 Electron 输出
-├── electron/         主进程和 preload 源码
-│   ├── main/
+├── build/                     打包图标等资源
+├── electron/                  主进程与 preload
+│   ├── main/                  窗口入口、CDN Referer 改写
 │   └── preload/
-├── public/           静态资源
-├── src/              渲染进程源码
-│   ├── components/
-│   │   └── update/
-│   ├── demos/
-│   └── type/
-└── test/             单元测试和端到端测试
-    └── e2e/
+├── public/
+│   ├── qishui-auth.html       卡密授权页（应用入口）
+│   └── qishui-downloader.html 下载页
+├── src/                       React 渲染进程（模板残留）
+├── electron-builder.json      productName: 下载神器
+└── release/                   安装包输出目录
 ```
 
-`electron/` 下的文件会被编译到 `dist-electron/`。
+## 说明
 
-## 安全说明
-
-`vite.config.ts` 里的 `renderer: {}` 只是给 Vite 用的适配器，用来在渲染进程中修复 Electron、Node.js API 和原生模块的使用，它本身并不等同于开启 Node integration。若确实需要在渲染进程中直接使用 Node.js，请在主进程创建 `BrowserWindow` 时开启 `nodeIntegration`，并谨慎评估安全影响。
-
-## 功能
-
-1. Electron 自动更新，文档见 [src/components/update/README.md](src/components/update/README.md)。
-2. Vitest 单元测试和 Playwright 端到端测试。
-3. TailwindCSS v4。
-
-## 资源
-
-- 自动更新文档：[English](src/components/update/README.md) | [简体中文](src/components/update/README.zh-CN.md)
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+- 授权状态保存在当前会话的 `sessionStorage`，关闭后需重新验证。
+- 抖音 CDN 有 Referer 防盗链；Electron 主进程会改写媒体请求头，保证应用内试听/下载可用。
+- 仅供个人学习与已获授权内容备份使用。
