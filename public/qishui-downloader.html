@@ -730,6 +730,24 @@
       return String(url || "").replace(/^http:\/\//i, "https://");
     }
 
+    function isNativeApp() {
+      return !!(window.MobileNet?.isNative?.());
+    }
+
+    function savedPathLabel(filename, saved) {
+      const raw = String(saved || "");
+      if (raw.includes("下载神器/")) return raw;
+      return `下载神器/${filename}`;
+    }
+
+    function savedSuccessMessage(filename, saved) {
+      const path = savedPathLabel(filename, saved);
+      if (isNativeApp()) {
+        return `已保存到 ${path}。请在系统面板选择「保存到文件」，或发送到微信/QQ/文件管理器。`;
+      }
+      return `已开始下载：${filename}`;
+    }
+
     function getFilesystem() {
       return window.Capacitor?.Plugins?.Filesystem || null;
     }
@@ -1177,7 +1195,7 @@
     }
 
     async function triggerSave(blob, filename) {
-      if (window.MobileNet?.isNative?.()) {
+      if (isNativeApp()) {
         const filesystem = getFilesystem();
         if (!filesystem || typeof filesystem.writeFile !== "function") {
           throw new Error("原生文件保存不可用");
@@ -1185,6 +1203,7 @@
 
         const data = await blobToBase64(blob);
         const path = `下载神器/${filename}`;
+        setStatus(`正在写入手机：${path}`);
         const saved = await filesystem.writeFile({
           path,
           data,
@@ -1194,6 +1213,7 @@
 
         const share = getShare();
         if (share && typeof share.share === "function" && saved?.uri) {
+          setStatus(`已保存到 ${path}，正在打开系统面板…`);
           await share.share({
             title: filename,
             text: filename,
@@ -1201,7 +1221,7 @@
             dialogTitle: `保存 ${filename}`,
           });
         }
-        return saved?.uri || path;
+        return path;
       }
 
       const a = document.createElement("a");
@@ -1221,18 +1241,14 @@
 
     async function downloadOne(track) {
       if (!track?.data?.url || busy) return;
+      const name = filenameOf(track.data);
       setBusyUi(true);
       renderList();
-      setStatus(`正在下载：${filenameOf(track.data)}`);
+      setStatus(isNativeApp() ? `正在保存到手机：${name}` : `正在下载：${name}`);
       try {
         const blob = await downloadBlob(track.data.url);
-        const target = await triggerSave(blob, filenameOf(track.data));
-        setStatus(
-          window.MobileNet?.isNative?.()
-            ? `已保存：${target}`
-            : `已开始下载：${filenameOf(track.data)}`,
-          "ok"
-        );
+        const target = await triggerSave(blob, name);
+        setStatus(savedSuccessMessage(name, target), "ok");
       } catch (err) {
         setStatus(`下载失败：${err.message || err}`, "error");
       } finally {
@@ -1285,7 +1301,11 @@
 
       for (const track of selected) {
         const name = uniqueZipName(filenameOf(track.data), usedNames);
-        setStatus(`打包中 ${done + 1}/${selected.length}：${name}`);
+        setStatus(
+          isNativeApp()
+            ? `正在下载第 ${done + 1}/${selected.length} 首到手机…`
+            : `打包中 ${done + 1}/${selected.length}：${name}`
+        );
         try {
           const blob = await downloadBlob(track.data.url);
           zip.file(name, blob);
@@ -1305,7 +1325,7 @@
         return;
       }
 
-      setStatus(`正在生成 ZIP（${ok} 首）…`);
+      setStatus(isNativeApp() ? `正在生成并保存 ZIP（${ok} 首）…` : `正在生成 ZIP（${ok} 首）…`);
       try {
         const zipBlob = await zip.generateAsync(
           { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
@@ -1318,12 +1338,9 @@
         const target = await triggerSave(zipBlob, zipName);
         setProgress(selected.length + 1, selected.length + 1);
         const type = fail === 0 ? "ok" : "warn";
-        setStatus(
-          window.MobileNet?.isNative?.()
-            ? `已保存：${target}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`
-            : `已下载压缩包：${zipName}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`,
-          type
-        );
+        let msg = savedSuccessMessage(zipName, target);
+        if (fail) msg = msg.replace(/。$/, "") + `（另有 ${fail} 首失败未打入）。`;
+        setStatus(msg, type);
       } catch (err) {
         setStatus(`生成 ZIP 失败：${err.message || err}`, "error");
       } finally {
