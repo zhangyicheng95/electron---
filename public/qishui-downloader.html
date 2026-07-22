@@ -289,12 +289,18 @@
   </style>
 </head>
 <body>
+  <script src="./qishui-cardkey.js"></script>
   <script>
     (function () {
-      var AUTH_STORAGE_KEY = "qishui_auth_token";
-      var AUTH_TOKEN = "ok";
-      if (sessionStorage.getItem(AUTH_STORAGE_KEY) !== AUTH_TOKEN) {
+      var CK = window.QishuiCardKey;
+      var embed = new URLSearchParams(location.search).get("embed") === "1";
+      if (!CK || !CK.hasUserSession()) {
         location.replace("./qishui-auth.html");
+        return;
+      }
+      // 管理员统一走带 Tab 的管理页；嵌入模式下不跳转避免循环
+      if (CK.hasAdminSession() && !embed) {
+        location.replace("./qishui-admin.html#download");
       }
     })();
   </script>

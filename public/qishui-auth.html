@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>音乐下载 · 授权验证</title>
+  <title>下载神器 · 授权验证</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -92,7 +92,7 @@
       padding: 0.9rem 1rem;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
     }
     input:focus {
       border-color: rgba(61, 255, 154, 0.55);
@@ -145,7 +145,7 @@
 </head>
 <body>
   <main class="gate">
-    <h1 class="brand">音乐<span>下载</span></h1>
+    <h1 class="brand">下载<span>神器</span></h1>
     <p class="lead">请输入卡密完成授权后进入下载页</p>
 
     <section class="panel">
@@ -157,7 +157,7 @@
           type="password"
           inputmode="text"
           placeholder="请输入卡密"
-          maxlength="64"
+          maxlength="256"
           required
           autofocus
         />
@@ -167,27 +167,24 @@
         <div class="status" id="status" aria-live="polite"></div>
       </form>
     </section>
-    <p class="hint">授权仅保存在本机当前会话，关闭浏览器后需重新验证。</p>
+    <p class="hint">授权仅保存在本机当前会话，关闭后需重新验证。</p>
   </main>
 
+  <script src="./qishui-cardkey.js"></script>
   <script>
     (function () {
-      // 可在此配置有效卡密（客户端校验，仅作门禁用途）
-      const VALID_KEYS = [
-        "ZHUANGSHILGM",
-      ];
-
-      const AUTH_STORAGE_KEY = "qishui_auth_token";
-      const AUTH_TOKEN = "ok";
-      const TARGET = "./qishui-downloader.html";
-
+      const CK = window.QishuiCardKey;
       const form = document.getElementById("authForm");
       const input = document.getElementById("cardKey");
       const statusEl = document.getElementById("status");
       const submitBtn = document.getElementById("submitBtn");
 
-      if (sessionStorage.getItem(AUTH_STORAGE_KEY) === AUTH_TOKEN) {
-        location.replace(TARGET);
+      if (CK.hasAdminSession()) {
+        location.replace("./qishui-admin.html");
+        return;
+      }
+      if (CK.hasUserSession()) {
+        location.replace("./qishui-downloader.html");
         return;
       }
 
@@ -196,16 +193,7 @@
         statusEl.className = "status" + (type ? " " + type : "");
       }
 
-      function normalizeKey(value) {
-        return String(value || "").trim().toUpperCase();
-      }
-
-      function isValidKey(value) {
-        const key = normalizeKey(value);
-        return VALID_KEYS.some((item) => normalizeKey(item) === key);
-      }
-
-      form.addEventListener("submit", function (event) {
+      form.addEventListener("submit", async function (event) {
         event.preventDefault();
         const value = input.value;
         if (!value.trim()) {
@@ -217,19 +205,29 @@
         submitBtn.disabled = true;
         setStatus("正在验证…");
 
-        // 轻微延迟，避免瞬间闪烁
-        setTimeout(function () {
-          if (!isValidKey(value)) {
+        try {
+          if (CK.isAdminPassword(value)) {
+            CK.grantAdminSession();
+            setStatus("管理员验证成功，正在进入管理页…", "ok");
+            location.replace("./qishui-admin.html");
+            return;
+          }
+
+          const result = await CK.verifyTempKey(value);
+          if (!result.ok) {
+            setStatus(result.reason || "卡密无效，请核对后重试", "error");
             submitBtn.disabled = false;
-            setStatus("卡密无效，请核对后重试", "error");
             input.select();
             return;
           }
 
-          sessionStorage.setItem(AUTH_STORAGE_KEY, AUTH_TOKEN);
+          CK.grantUserSession();
           setStatus("验证成功，正在跳转…", "ok");
-          location.replace(TARGET);
-        }, 280);
+          location.replace("./qishui-downloader.html");
+        } catch (err) {
+          setStatus(err.message || "验证失败", "error");
+          submitBtn.disabled = false;
+        }
       });
     })();
   </script>

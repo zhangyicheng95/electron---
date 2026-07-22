@@ -7,6 +7,7 @@ English | [简体中文](README.zh-CN.md)
 ## Features
 
 - Card-key gate before accessing the downloader
+- Admin can generate time-limited temporary card keys
 - Batch parse Qishui / Douyin Music share links
 - Preview, single download, and ZIP batch download
 - Packaged app name: **下载神器**
@@ -22,7 +23,7 @@ npm install
 npm run dev
 ```
 
-Card keys can be configured in `public/qishui-auth.html` → `VALID_KEYS`.
+Admin password and temporary key logic live in `public/qishui-cardkey.js`; admin UI is `public/qishui-admin.html`.
 
 ## Scripts
 
@@ -50,6 +51,8 @@ Build output goes to `release/<version>/`, for example:
 │   └── preload/
 ├── public/
 │   ├── qishui-auth.html       Card-key auth page (app entry)
+│   ├── qishui-admin.html      Admin: generate temporary keys
+│   ├── qishui-cardkey.js      Key signing / verification
 │   └── qishui-downloader.html Downloader page
 ├── src/                       React renderer (template leftovers)
 ├── electron-builder.json      productName: 下载神器

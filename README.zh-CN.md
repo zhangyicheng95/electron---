@@ -7,6 +7,7 @@
 ## 功能
 
 - 卡密验证后进入下载页
+- 管理员可生成带期限的临时卡密
 - 支持批量解析汽水 / 抖音音乐分享链接
 - 支持试听、单曲下载、批量打包 ZIP
 - 安装后软件名：**下载神器**
@@ -22,7 +23,7 @@ npm install
 npm run dev
 ```
 
-卡密可在 `public/qishui-auth.html` 的 `VALID_KEYS` 中配置。
+管理员密码与临时卡密逻辑见 `public/qishui-cardkey.js`；管理页为 `public/qishui-admin.html`。
 
 ## 可用脚本
 
@@ -50,6 +51,8 @@ npm run dev
 │   └── preload/
 ├── public/
 │   ├── qishui-auth.html       卡密授权页（应用入口）
+│   ├── qishui-admin.html      管理员：生成临时卡密
+│   ├── qishui-cardkey.js      卡密签发 / 校验
 │   └── qishui-downloader.html 下载页
 ├── src/                       React 渲染进程（模板残留）
 ├── electron-builder.json      productName: 下载神器
