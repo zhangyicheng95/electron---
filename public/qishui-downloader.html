@@ -36,7 +36,8 @@
     .wrap {
       width: min(880px, calc(100% - 2rem));
       margin: 0 auto;
-      padding: 3.5rem 0 4rem;
+      /* 适配刘海/沉浸式状态栏：顶部至少预留 safe-area */
+      padding: calc(3.5rem + env(safe-area-inset-top)) 0 4rem;
     }
 
     .brand {
@@ -353,7 +354,7 @@
   </script>
   <main class="wrap">
     <h1 class="brand">音乐<span>下载</span></h1>
-    <p class="lead">支持汽水分享链接批量解析，或按歌名搜索（酷我音源，优先展示可完整播放的版本）后试听、单曲下载、打包 ZIP。</p>
+    <p class="lead">支持汽水分享链接批量解析，或按歌名搜索（优先使用 GD 聚合的 JOOX 源，失败时回退酷我）后试听、单曲下载、打包 ZIP。</p>
 
     <section class="panel">
       <div class="mode-tabs" role="tablist" aria-label="下载方式">
@@ -375,9 +376,14 @@
         <label for="searchInput">歌名 / 歌手</label>
         <div class="search-row">
           <input id="searchInput" type="search" placeholder="例如：晴天 周杰伦" maxlength="80" />
+          <select id="searchSource" aria-label="搜索来源" title="搜索来源" style="min-width:8.5rem;">
+            <option value="auto" selected>自动（GD·JOOX → 酷我）</option>
+            <option value="gd-joox">GD·JOOX</option>
+            <option value="kuwo">酷我</option>
+          </select>
           <button class="btn-primary" id="searchBtn" type="button">搜索</button>
         </div>
-        <p class="note" style="margin-top:0.75rem">歌名搜索使用酷我公开接口，结果可能与汽水音源不同；仅供个人学习使用。</p>
+        <p class="note" style="margin-top:0.75rem">歌名搜索会按所选来源抓取播放地址；仅供个人学习使用。</p>
       </div>
 
       <div class="status" id="status" aria-live="polite"></div>
@@ -397,7 +403,7 @@
       </div>
     </section>
 
-    <p class="note">仅供个人学习与已获授权内容备份。批量下载会打包成一个 ZIP；单曲下载仍为单独音频文件。音频直链有时效，解析后请尽快下载。</p>
+    <p class="note">仅供个人学习与已获授权内容备份。批量下载会打包成一个 ZIP；单曲下载仍为单独音频文件。歌名搜索数据来源包含 GD音乐台（music.gdstudio.xyz）聚合结果；音频直链有时效，解析后请尽快下载。</p>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -406,14 +412,18 @@
       "《为你写诗(R&B版)(Cover吴克群)》@汽水音乐 https://qishui.douyin.com/s/iCH7xHny/",
     ].join("\n");
     const API = "https://api.bugpk.com/api/qsmusic";
+    const GD_API = "https://music-api.gdstudio.xyz/api.php";
+    const GD_PRIMARY_SOURCE = "joox";
     const KUWO_SEARCH = "https://search.kuwo.cn/r.s";
     const KUWO_PLAY = "https://antiserver.kuwo.cn/anti.s";
     const CONCURRENCY = 2;
-    const SEARCH_LIMIT = 24;
+    const SEARCH_LIMIT = 20;
     const KUWO_PROMO_MAX_BYTES = 400 * 1024;
+    const GD_MIN_BYTES = 512 * 1024;
 
     const input = document.getElementById("input");
     const searchInput = document.getElementById("searchInput");
+    const searchSourceEl = document.getElementById("searchSource");
     const statusEl = document.getElementById("status");
     const resultEl = document.getElementById("result");
     const listEl = document.getElementById("list");
@@ -431,12 +441,49 @@
     let tracks = [];
     let busy = false;
     let currentMode = "link";
+    let activeTask = "";
+    let stopRequested = false;
 
     function setBusyUi(on) {
       busy = on;
-      parseBtn.disabled = on;
-      searchBtn.disabled = on;
+      if (!on) {
+        parseBtn.disabled = false;
+        searchBtn.disabled = false;
+        parseBtn.textContent = "批量解析";
+        searchBtn.textContent = "搜索";
+      } else if (activeTask === "parse") {
+        parseBtn.disabled = false;
+        parseBtn.textContent = "停止";
+        searchBtn.disabled = true;
+        searchBtn.textContent = "搜索";
+      } else if (activeTask === "search") {
+        searchBtn.disabled = false;
+        searchBtn.textContent = "停止";
+        parseBtn.disabled = true;
+        parseBtn.textContent = "批量解析";
+      } else {
+        parseBtn.disabled = true;
+        searchBtn.disabled = true;
+      }
       batchDownloadBtn.disabled = on || tracks.filter((t) => t.status === "ok" && t.selected).length === 0;
+    }
+
+    function startTask(type) {
+      activeTask = type;
+      stopRequested = false;
+      setBusyUi(true);
+    }
+
+    function finishTask() {
+      activeTask = "";
+      stopRequested = false;
+      setBusyUi(false);
+    }
+
+    function requestStop() {
+      if (!busy) return;
+      stopRequested = true;
+      setStatus("正在停止当前任务，请稍候…", "warn");
     }
 
     function switchMode(mode) {
@@ -507,6 +554,17 @@
       );
     }
 
+    function sourceLabel(source) {
+      switch (source) {
+        case "joox": return "JOOX";
+        case "gd-joox": return "GD·JOOX";
+        case "kuwo": return "酷我";
+        case "gd-kuwo": return "GD·酷我";
+        case "qishui": return "汽水";
+        default: return source ? String(source).toUpperCase() : "";
+      }
+    }
+
     function updateSummary() {
       const ok = tracks.filter((t) => t.status === "ok").length;
       const fail = tracks.filter((t) => t.status === "error").length;
@@ -568,6 +626,7 @@
         if (track.status === "ok" && track.data) {
           const meta = track.data.video_meta || {};
           for (const t of [
+            sourceLabel(track.data.source),
             meta.vtype || "audio",
             meta.codec_type,
             meta.bitrate ? `${Math.round(meta.bitrate / 1000)} kbps` : null,
@@ -657,6 +716,75 @@
       return String(url || "").replace(/^http:\/\//i, "https://");
     }
 
+    function toArray(value) {
+      if (Array.isArray(value)) return value.filter(Boolean);
+      if (value == null || value === "") return [];
+      return [value];
+    }
+
+    function firstNonEmpty(...values) {
+      for (const value of values) {
+        if (value != null && String(value).trim()) return String(value).trim();
+      }
+      return "";
+    }
+
+    async function fetchGdJson(params) {
+      const res = await MobileNet.netFetch(`${GD_API}?${params.toString()}`);
+      if (!res.ok) throw new Error(`GD API HTTP ${res.status}`);
+      return res.json();
+    }
+
+    async function searchGd(keyword, source = GD_PRIMARY_SOURCE) {
+      const params = new URLSearchParams({
+        types: "search",
+        source,
+        name: keyword,
+        count: String(SEARCH_LIMIT),
+        pages: "1",
+      });
+      const json = await fetchGdJson(params);
+      const list = Array.isArray(json) ? json : [];
+      return list.map((item) => {
+        const artists = toArray(item.artist).map((x) => decodeHtml(x)).filter(Boolean);
+        return {
+          rid: String(item.id || ""),
+          title: decodeHtml(item.name || "未命名曲目"),
+          artist: artists.join(" / ") || "未知艺人",
+          album: decodeHtml(item.album || ""),
+          cover: "",
+          sourceUrl: `${source}://${item.id}`,
+          source,
+          vipOnly: false,
+          fromGd: true,
+          raw: item,
+        };
+      }).filter((x) => x.rid);
+    }
+
+    async function fetchGdPlayUrl(hit) {
+      const params = new URLSearchParams({
+        types: "url",
+        source: hit.source,
+        id: hit.rid,
+        br: "128",
+      });
+      const json = await fetchGdJson(params);
+      const url = toHttps(json?.url || "");
+      if (!/^https?:\/\//i.test(url)) {
+        throw new Error(`${sourceLabel(`gd-${hit.source}`)} 未返回可用播放地址`);
+      }
+      // GD API 返回的 size 通常是“字节数”，不要额外乘 1024
+      const size = Number(json?.size || 0);
+      if (Number.isFinite(size) && size > 0 && size < GD_MIN_BYTES) {
+        throw new Error(`${sourceLabel(`gd-${hit.source}`)} 返回的音频疑似不可用`);
+      }
+      return {
+        url,
+        size: Number.isFinite(size) && size > 0 ? size : undefined,
+      };
+    }
+
     function isKuwoVipHit(item) {
       const mvpay = item?.mvpayinfo || {};
       return String(mvpay.play || "0") === "1";
@@ -739,6 +867,41 @@
       };
     }
 
+    async function resolveGdTrack(hit) {
+      const media = await fetchGdPlayUrl(hit);
+      return {
+        url: media.url,
+        albumname: hit.title,
+        artistsname: hit.artist,
+        artistsmedium_avatar_url: hit.cover ? [hit.cover] : [],
+        video_meta: {
+          vtype: "mp3",
+          codec_type: "mp3",
+          bitrate: 128000,
+          size: media.size,
+        },
+        source: `gd-${hit.source}`,
+      };
+    }
+
+    async function searchTracks(keyword, sourceMode = "auto") {
+      if (sourceMode === "kuwo") return searchKuwo(keyword);
+
+      if (sourceMode === "gd-joox") {
+        return await searchGd(keyword, GD_PRIMARY_SOURCE).catch(() => []);
+      }
+
+      // auto：GD·JOOX 优先，失败/无结果则回退酷我
+      const gdHits = await searchGd(keyword, GD_PRIMARY_SOURCE).catch(() => []);
+      if (gdHits.length) return gdHits;
+      return searchKuwo(keyword);
+    }
+
+    async function resolveTrack(hit) {
+      if (hit?.fromGd) return resolveGdTrack(hit);
+      return resolveKuwoTrack(hit);
+    }
+
     function attachAudio(audio, url) {
       if (!url) return;
       if (MobileNet.supportsDirectStream() && MobileNet.needsReferer(url)) {
@@ -769,13 +932,15 @@
       return json.data;
     }
 
-    async function mapPool(items, limit, worker) {
+    async function mapPool(items, limit, worker, shouldStop) {
       const results = new Array(items.length);
       let next = 0;
       async function run() {
         while (next < items.length) {
+          if (shouldStop && shouldStop()) return;
           const i = next++;
           results[i] = await worker(items[i], i);
+          if (shouldStop && shouldStop()) return;
         }
       }
       await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
@@ -783,7 +948,10 @@
     }
 
     async function parseAll() {
-      if (busy) return;
+      if (busy) {
+        if (activeTask === "parse") requestStop();
+        return;
+      }
       const urls = extractUrls(input.value);
       if (!urls.length) {
         setStatus("未识别到汽水/抖音音乐链接。可多行粘贴 https://qishui.douyin.com/s/... 链接。", "error");
@@ -793,7 +961,7 @@
         return;
       }
 
-      setBusyUi(true);
+      startTask("parse");
       tracks = urls.map((sourceUrl, i) => ({
         id: `t${i}-${Date.now()}`,
         sourceUrl,
@@ -809,6 +977,7 @@
       let fail = 0;
 
       await mapPool(tracks, CONCURRENCY, async (track) => {
+        if (stopRequested) return;
         try {
           track.data = await parseOne(track.sourceUrl);
           track.status = "ok";
@@ -824,39 +993,55 @@
         setProgress(done, urls.length);
         setStatus(`解析中 ${done}/${urls.length} · 成功 ${ok} · 失败 ${fail}`);
         renderList();
-      });
+      }, () => stopRequested);
 
-      setBusyUi(false);
+      const wasStopped = stopRequested;
+      finishTask();
       renderList();
-      setProgress(urls.length, urls.length);
+      setProgress(wasStopped ? done : urls.length, urls.length);
+      if (wasStopped) {
+        setStatus(`已停止：已处理 ${done}/${urls.length} · 成功 ${ok} · 失败 ${fail}`, "warn");
+        return;
+      }
       const type = fail === 0 ? "ok" : ok === 0 ? "error" : "warn";
       setStatus(`解析完成：成功 ${ok}，失败 ${fail}。可勾选后批量下载。`, type);
     }
 
     async function searchAll() {
-      if (busy) return;
+      if (busy) {
+        if (activeTask === "search") requestStop();
+        return;
+      }
       const keyword = searchInput.value.trim();
+      const sourceMode = searchSourceEl?.value || "auto";
       if (!keyword) {
         setStatus("请输入歌名或歌手", "error");
         searchInput.focus();
         return;
       }
 
-      setBusyUi(true);
+      startTask("search");
       tracks = [];
       renderList();
       setProgress(0, 1);
-      setStatus(`正在搜索「${keyword}」…`);
+      const modeLabel =
+        sourceMode === "gd-joox"
+          ? "GD·JOOX"
+          : sourceMode === "kuwo"
+            ? "酷我"
+            : "自动（GD·JOOX → 酷我）";
+      setStatus(`正在搜索「${keyword}」（${modeLabel}）…`);
 
       try {
-        const hits = await searchKuwo(keyword);
+        const hits = await searchTracks(keyword, sourceMode);
         if (!hits.length) {
-          setBusyUi(false);
+          finishTask();
           setProgress(0, 0);
           setStatus("没有搜到相关歌曲，换个关键词试试。", "warn");
           return;
         }
 
+        const primaryLabel = hits[0]?.fromGd ? `GD·${sourceLabel(hits[0].source)}` : "酷我";
         const playableCount = hits.filter((h) => !h.vipOnly).length;
         const vipCount = hits.length - playableCount;
 
@@ -871,16 +1056,16 @@
         setProgress(0, hits.length);
         setStatus(
           playableCount
-            ? `搜到 ${hits.length} 首（可播 ${playableCount}${vipCount ? `，VIP ${vipCount}` : ""}），正在获取播放地址…`
-            : `搜到 ${hits.length} 首，但均为酷我VIP。可换翻唱/现场版关键词再试。`
+            ? `${primaryLabel} 搜到 ${hits.length} 首（可播 ${playableCount}${vipCount ? `，VIP ${vipCount}` : ""}），正在获取播放地址…`
+            : `搜到 ${hits.length} 首，但均受限。可换翻唱/现场版关键词再试。`
         );
 
         if (!playableCount) {
           for (const track of tracks) {
             track.status = "error";
-            track.error = "酷我VIP曲目，请换其他版本或关键词";
+            track.error = "当前结果受限，请换其他版本或关键词";
           }
-          setBusyUi(false);
+          finishTask();
           renderList();
           setProgress(hits.length, hits.length);
           setStatus("未找到可完整播放的版本，请尝试翻唱、现场版等关键词。", "warn");
@@ -893,6 +1078,7 @@
         let skipped = 0;
 
         await mapPool(tracks, CONCURRENCY, async (track) => {
+          if (stopRequested) return;
           if (track.hit?.vipOnly) {
             track.status = "error";
             track.error = "酷我VIP曲目，请选择标有「可播」的其他版本";
@@ -905,7 +1091,7 @@
             return;
           }
           try {
-            track.data = await resolveKuwoTrack(track.hit);
+            track.data = await resolveTrack(track.hit);
             track.status = "ok";
             track.selected = true;
             ok++;
@@ -919,18 +1105,23 @@
           setProgress(done, hits.length);
           setStatus(`解析中 ${done}/${hits.length} · 成功 ${ok} · 失败 ${fail}${skipped ? ` · 跳过VIP ${skipped}` : ""}`);
           renderList();
-        });
+        }, () => stopRequested);
 
-        setBusyUi(false);
+        const wasStopped = stopRequested;
+        finishTask();
         renderList();
-        setProgress(hits.length, hits.length);
+        setProgress(wasStopped ? done : hits.length, hits.length);
+        if (wasStopped) {
+          setStatus(`已停止：已处理 ${done}/${hits.length} · 可播 ${ok} · 失败 ${fail}${skipped ? ` · 跳过VIP ${skipped}` : ""}`, "warn");
+          return;
+        }
         const type = fail === 0 && skipped === 0 ? "ok" : ok === 0 ? "error" : "warn";
         setStatus(
-          `搜索完成：可播 ${ok}，失败 ${fail}${skipped ? `，VIP跳过 ${skipped}` : ""}。优先选择标有「可播」的结果。`,
+          `搜索完成：可播 ${ok}，失败 ${fail}${skipped ? `，VIP跳过 ${skipped}` : ""}。优先选择 ${primaryLabel} 的结果。`,
           type
         );
       } catch (err) {
-        setBusyUi(false);
+        finishTask();
         setProgress(0, 0);
         setStatus(`搜索失败：${err.message || err}`, "error");
       }

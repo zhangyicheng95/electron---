@@ -48,6 +48,22 @@
     ]);
   }
 
+  async function fetchWithTimeout(url, init, ms, label) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+      const resp = await fetch(url, { ...(init || {}), signal: controller.signal });
+      return resp;
+    } catch (err) {
+      if (err && (err.name === "AbortError" || String(err).includes("aborted"))) {
+        throw new Error(`${label || "请求"}超时 (${Math.round(ms / 1000)}s)`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function needsReferer(url) {
     try {
       return CDN_RE.test(new URL(url).hostname);
@@ -147,35 +163,39 @@
         headers,
         data: init && init.body ? init.body : undefined,
         responseType: "text",
-        connectTimeout: 60000,
-        readTimeout: 120000,
+        connectTimeout: 30000,
+        readTimeout: 45000,
       });
 
       if (req) {
-        const res = await withTimeout(req, 120000, "网络请求");
-
-        return {
-          ok: res.status >= 200 && res.status < 300,
-          status: res.status,
-          headers: normalizeHeaders(res.headers),
-          async text() {
-            return typeof res.data === "string" ? res.data : JSON.stringify(res.data ?? "");
-          },
-          async json() {
-            if (typeof res.data === "string") return JSON.parse(res.data);
-            return res.data;
-          },
-          async blob() {
-            if (typeof res.data === "string" && res.data.length > 0) {
-              try {
-                return base64ToBlob(res.data, pickContentType(res.headers, url));
-              } catch (_) {
-                return new Blob([res.data], { type: "text/plain" });
+        try {
+          const res = await withTimeout(req, 45000, "原生网络请求");
+          return {
+            ok: res.status >= 200 && res.status < 300,
+            status: res.status,
+            headers: normalizeHeaders(res.headers),
+            async text() {
+              return typeof res.data === "string" ? res.data : JSON.stringify(res.data ?? "");
+            },
+            async json() {
+              if (typeof res.data === "string") return JSON.parse(res.data);
+              return res.data;
+            },
+            async blob() {
+              if (typeof res.data === "string" && res.data.length > 0) {
+                try {
+                  return base64ToBlob(res.data, pickContentType(res.headers, url));
+                } catch (_) {
+                  return new Blob([res.data], { type: "text/plain" });
+                }
               }
-            }
-            return new Blob([res.data ?? ""], { type: "text/plain" });
-          },
-        };
+              return new Blob([res.data ?? ""], { type: "text/plain" });
+            },
+          };
+        } catch (err) {
+          // 有些机型/网络下 CapacitorHttp 会卡超时，回退到 WebView fetch 再试一次
+          console.warn("native netFetch failed, fallback to web fetch:", err && err.message ? err.message : err);
+        }
       }
     }
 
@@ -183,7 +203,7 @@
     if (needsReferer(url)) {
       if (!headers.has("Referer")) headers.set("Referer", QISHUI_REFERER);
     }
-    const resp = await fetch(url, { ...(init || {}), headers });
+    const resp = await fetchWithTimeout(url, { ...(init || {}), headers }, 120000, "网络请求");
     return {
       ok: resp.ok,
       status: resp.status,
