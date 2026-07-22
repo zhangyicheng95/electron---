@@ -730,6 +730,27 @@
       return String(url || "").replace(/^http:\/\//i, "https://");
     }
 
+    function getFilesystem() {
+      return window.Capacitor?.Plugins?.Filesystem || null;
+    }
+
+    function getShare() {
+      return window.Capacitor?.Plugins?.Share || null;
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result || "");
+          const comma = text.indexOf(",");
+          resolve(comma >= 0 ? text.slice(comma + 1) : text);
+        };
+        reader.onerror = () => reject(reader.error || new Error("文件转换失败"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
     function toArray(value) {
       if (Array.isArray(value)) return value.filter(Boolean);
       if (value == null || value === "") return [];
@@ -1155,7 +1176,34 @@
       }
     }
 
-    function triggerSave(blob, filename) {
+    async function triggerSave(blob, filename) {
+      if (window.MobileNet?.isNative?.()) {
+        const filesystem = getFilesystem();
+        if (!filesystem || typeof filesystem.writeFile !== "function") {
+          throw new Error("原生文件保存不可用");
+        }
+
+        const data = await blobToBase64(blob);
+        const path = `下载神器/${filename}`;
+        const saved = await filesystem.writeFile({
+          path,
+          data,
+          directory: "DOCUMENTS",
+          recursive: true,
+        });
+
+        const share = getShare();
+        if (share && typeof share.share === "function" && saved?.uri) {
+          await share.share({
+            title: filename,
+            text: filename,
+            url: saved.uri,
+            dialogTitle: `保存 ${filename}`,
+          });
+        }
+        return saved?.uri || path;
+      }
+
       const a = document.createElement("a");
       const obj = URL.createObjectURL(blob);
       a.href = obj;
@@ -1164,6 +1212,7 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(obj), 1500);
+      return filename;
     }
 
     async function downloadBlob(url) {
@@ -1177,8 +1226,13 @@
       setStatus(`正在下载：${filenameOf(track.data)}`);
       try {
         const blob = await downloadBlob(track.data.url);
-        triggerSave(blob, filenameOf(track.data));
-        setStatus(`已开始下载：${filenameOf(track.data)}`, "ok");
+        const target = await triggerSave(blob, filenameOf(track.data));
+        setStatus(
+          window.MobileNet?.isNative?.()
+            ? `已保存：${target}`
+            : `已开始下载：${filenameOf(track.data)}`,
+          "ok"
+        );
       } catch (err) {
         setStatus(`下载失败：${err.message || err}`, "error");
       } finally {
@@ -1261,10 +1315,15 @@
           }
         );
         const zipName = `音乐_${ok}首_${zipStamp()}.zip`;
-        triggerSave(zipBlob, zipName);
+        const target = await triggerSave(zipBlob, zipName);
         setProgress(selected.length + 1, selected.length + 1);
         const type = fail === 0 ? "ok" : "warn";
-        setStatus(`已下载压缩包：${zipName}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`, type);
+        setStatus(
+          window.MobileNet?.isNative?.()
+            ? `已保存：${target}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`
+            : `已下载压缩包：${zipName}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`,
+          type
+        );
       } catch (err) {
         setStatus(`生成 ZIP 失败：${err.message || err}`, "error");
       } finally {
