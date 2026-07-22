@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>音乐下载</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #0c1210;
+      --bg1: #152019;
+      --ink: #e8f2ea;
+      --muted: #8aa093;
+      --line: rgba(232, 242, 234, 0.12);
+      --accent: #3dff9a;
+      --warn: #ffb454;
+      --danger: #ff6b6b;
+      --card: rgba(21, 32, 25, 0.72);
+      --glow: rgba(61, 255, 154, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "DM Sans", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 480px at 12% -10%, rgba(61, 255, 154, 0.16), transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, rgba(64, 180, 255, 0.1), transparent 50%),
+        linear-gradient(160deg, var(--bg0), var(--bg1) 55%, #0a100e);
+      background-attachment: fixed;
+    }
+
+    .wrap {
+      width: min(880px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3.5rem 0 4rem;
+    }
+
+    .brand {
+      font-family: Syne, sans-serif;
+      font-weight: 800;
+      font-size: clamp(2rem, 5vw, 2.75rem);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      margin: 0 0 0.6rem;
+    }
+    .brand span { color: var(--accent); }
+
+    .lead {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      max-width: 42rem;
+      line-height: 1.55;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+      padding: 1.25rem;
+      box-shadow: 0 0 0 1px rgba(61, 255, 154, 0.04), 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.55rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--ink);
+      font: inherit;
+      padding: 0.9rem 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    textarea:focus {
+      border-color: rgba(61, 255, 154, 0.55);
+      box-shadow: 0 0 0 3px var(--glow);
+    }
+    textarea::placeholder { color: #5f7467; }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.9rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button, .btn {
+      font-family: Syne, sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 0;
+      cursor: pointer;
+      padding: 0.8rem 1.2rem;
+      transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s, border-color 0.15s;
+      font-size: 0.95rem;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #04140b;
+      min-width: 8.5rem;
+    }
+    .btn-primary:hover:not(:disabled) { background: #6dffb2; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .btn-ghost:hover:not(:disabled) { border-color: rgba(232, 242, 234, 0.35); }
+
+    .btn-download {
+      background: linear-gradient(135deg, var(--accent), #2bd4ff);
+      color: #04140b;
+    }
+
+    .btn-sm {
+      padding: 0.45rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .status {
+      margin-top: 0.9rem;
+      min-height: 1.4rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+    .status.error { color: var(--danger); }
+    .status.ok { color: var(--accent); }
+    .status.warn { color: var(--warn); }
+
+    .progress {
+      display: none;
+      margin-top: 0.75rem;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .progress.show { display: block; }
+    .progress > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #2bd4ff);
+      transition: width 0.25s ease;
+    }
+
+    .result {
+      display: none;
+      margin-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      padding-top: 1.1rem;
+      animation: rise 0.35s ease both;
+    }
+    .result.show { display: block; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.9rem;
+    }
+    .toolbar-left {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+    }
+    .summary {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check input { accent-color: var(--accent); }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.22);
+      padding: 0.85rem;
+      display: grid;
+      grid-template-columns: auto 72px 1fr;
+      gap: 0.85rem;
+      align-items: start;
+    }
+    @media (max-width: 620px) {
+      .item { grid-template-columns: auto 1fr; }
+      .item .cover { grid-column: 2; width: 64px; height: 64px; }
+      .item .body { grid-column: 1 / -1; }
+    }
+
+    .item.failed { border-color: rgba(255, 107, 107, 0.35); }
+    .item.ok { border-color: rgba(61, 255, 154, 0.22); }
+    .item.pending { opacity: 0.75; }
+
+    .item .pick {
+      padding-top: 0.35rem;
+    }
+    .item .pick input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+    .cover {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      background: #0a100e;
+      border: 1px solid var(--line);
+    }
+
+    .title {
+      font-family: Syne, sans-serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 0.2rem;
+      letter-spacing: -0.02em;
+    }
+    .artist { margin: 0 0 0.45rem; color: var(--muted); font-size: 0.92rem; }
+    .url-hint {
+      margin: 0 0 0.5rem;
+      color: #6f8377;
+      font-size: 0.78rem;
+      word-break: break-all;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.55rem;
+    }
+    .chip {
+      font-size: 0.72rem;
+      color: #b7d0bf;
+      border: 1px solid var(--line);
+      padding: 0.2rem 0.45rem;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .chip.err { color: #ffb4b4; border-color: rgba(255, 107, 107, 0.35); }
+    .chip.warn { color: var(--warn); border-color: rgba(255, 180, 84, 0.35); }
+
+    .item audio {
+      width: 100%;
+      height: 36px;
+      margin-top: 0.35rem;
+    }
+
+    .note {
+      margin-top: 1.5rem;
+      color: #6f8377;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function () {
+      var AUTH_STORAGE_KEY = "qishui_auth_token";
+      var AUTH_TOKEN = "ok";
+      if (sessionStorage.getItem(AUTH_STORAGE_KEY) !== AUTH_TOKEN) {
+        location.replace("./qishui-auth.html");
+      }
+    })();
+  </script>
+  <main class="wrap">
+    <h1 class="brand">音乐<span>下载</span></h1>
+    <p class="lead">支持批量：每行一条分享文案或链接，也可混贴多段文案。解析后勾选曲目，一键打包成 ZIP；也可单曲试听下载。</p>
+
+    <section class="panel">
+      <label for="input">分享链接 / 文案（可多条）</label>
+      <textarea id="input" placeholder="每行一条，或粘贴多段分享文案，例如：&#10;《为你写诗(R&B版)(Cover吴克群)》@汽水音乐 https://qishui.douyin.com/s/iCH7xHny/&#10;https://qishui.douyin.com/s/另一条/"></textarea>
+      <div class="row">
+        <button class="btn-primary" id="parseBtn" type="button">批量解析</button>
+        <button class="btn-ghost" id="fillDemoBtn" type="button">填入示例</button>
+        <button class="btn-ghost" id="clearBtn" type="button">清空</button>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="progress" id="progress"><i id="progressBar"></i></div>
+
+      <div class="result" id="result">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <label class="check"><input type="checkbox" id="selectAll" checked /> 全选可下载</label>
+            <span class="summary" id="summary"></span>
+          </div>
+          <div class="row" style="margin-top:0">
+            <button class="btn-download" id="batchDownloadBtn" type="button">打包下载 ZIP</button>
+          </div>
+        </div>
+        <div class="list" id="list"></div>
+      </div>
+    </section>
+
+    <p class="note">仅供个人学习与已获授权内容备份。批量下载会打包成一个 ZIP；单曲下载仍为单独音频文件。音频直链有时效，解析后请尽快下载。</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    const DEMO = [
+      "《为你写诗(R&B版)(Cover吴克群)》@汽水音乐 https://qishui.douyin.com/s/iCH7xHny/",
+    ].join("\n");
+    const API = "https://api.bugpk.com/api/qsmusic";
+    const CONCURRENCY = 2;
+
+    const input = document.getElementById("input");
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+    const listEl = document.getElementById("list");
+    const parseBtn = document.getElementById("parseBtn");
+    const batchDownloadBtn = document.getElementById("batchDownloadBtn");
+    const selectAllEl = document.getElementById("selectAll");
+    const summaryEl = document.getElementById("summary");
+    const progressEl = document.getElementById("progress");
+    const progressBar = document.getElementById("progressBar");
+
+    /** @type {Array<{id:string, sourceUrl:string, status:string, error?:string, data?:any, selected:boolean}>} */
+    let tracks = [];
+    let busy = false;
+
+    function setStatus(text, type = "") {
+      statusEl.textContent = text;
+      statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function setProgress(done, total) {
+      if (!total) {
+        progressEl.classList.remove("show");
+        progressBar.style.width = "0%";
+        return;
+      }
+      progressEl.classList.add("show");
+      progressBar.style.width = `${Math.round((done / total) * 100)}%`;
+    }
+
+    function extractUrls(text) {
+      const re = /https?:\/\/(?:qishui|music)\.douyin\.com\/[^\s<>"']+/gi;
+      const found = String(text || "").match(re) || [];
+      const cleaned = found.map((u) => u.replace(/[)\]】》'",.]+$/g, ""));
+      return [...new Set(cleaned)];
+    }
+
+    function formatBytes(n) {
+      if (!n && n !== 0) return "未知大小";
+      const u = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      let v = Number(n);
+      while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+      return `${v.toFixed(i ? 2 : 0)} ${u[i]}`;
+    }
+
+    function safeName(name) {
+      return String(name || "qishui-track")
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80);
+    }
+
+    function filenameOf(data) {
+      const ext = (data.video_meta?.vtype || "m4a").replace(/^\./, "");
+      const artist = safeName(data.artistsname || data.artist || "未知艺人");
+      const title = safeName(data.albumname || data.title || "未命名曲目");
+      return `${artist} - ${title}.${ext}`;
+    }
+
+    function coverOf(data) {
+      return (
+        (Array.isArray(data.artistsmedium_avatar_url) && data.artistsmedium_avatar_url[0]) ||
+        data.cover ||
+        data.avatar ||
+        ""
+      );
+    }
+
+    function updateSummary() {
+      const ok = tracks.filter((t) => t.status === "ok").length;
+      const fail = tracks.filter((t) => t.status === "error").length;
+      const selected = tracks.filter((t) => t.status === "ok" && t.selected).length;
+      summaryEl.textContent = `共 ${tracks.length} 条 · 成功 ${ok} · 失败 ${fail} · 已选 ${selected}`;
+      batchDownloadBtn.disabled = busy || selected === 0;
+      const selectable = tracks.filter((t) => t.status === "ok");
+      selectAllEl.checked = selectable.length > 0 && selectable.every((t) => t.selected);
+      selectAllEl.indeterminate = selectable.some((t) => t.selected) && !selectAllEl.checked;
+    }
+
+    function renderList() {
+      listEl.innerHTML = "";
+      for (const track of tracks) {
+        const item = document.createElement("article");
+        item.className = `item ${track.status}`;
+        item.dataset.id = track.id;
+
+        const pick = document.createElement("label");
+        pick.className = "pick";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!track.selected;
+        cb.disabled = track.status !== "ok" || busy;
+        cb.addEventListener("change", () => {
+          track.selected = cb.checked;
+          updateSummary();
+        });
+        pick.appendChild(cb);
+
+        const cover = document.createElement("img");
+        cover.className = "cover";
+        cover.alt = "封面";
+        const coverUrl = track.data ? coverOf(track.data) : "";
+        if (coverUrl) cover.src = coverUrl;
+        else cover.style.visibility = "hidden";
+
+        const body = document.createElement("div");
+        body.className = "body";
+
+        const title = document.createElement("h2");
+        title.className = "title";
+        title.textContent = track.data
+          ? (track.data.albumname || track.data.title || "未命名曲目")
+          : (track.status === "pending" ? "解析中…" : "解析失败");
+
+        const artist = document.createElement("p");
+        artist.className = "artist";
+        artist.textContent = track.data
+          ? (track.data.artistsname || track.data.artist || "未知艺人")
+          : (track.error || "等待解析");
+
+        const urlHint = document.createElement("p");
+        urlHint.className = "url-hint";
+        urlHint.textContent = track.sourceUrl;
+
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        if (track.status === "ok" && track.data) {
+          const meta = track.data.video_meta || {};
+          for (const t of [
+            meta.vtype || "audio",
+            meta.codec_type,
+            meta.bitrate ? `${Math.round(meta.bitrate / 1000)} kbps` : null,
+            formatBytes(meta.size),
+          ].filter(Boolean)) {
+            const chip = document.createElement("span");
+            chip.className = "chip";
+            chip.textContent = t;
+            chips.appendChild(chip);
+          }
+        } else if (track.status === "error") {
+          const chip = document.createElement("span");
+          chip.className = "chip err";
+          chip.textContent = "失败";
+          chips.appendChild(chip);
+        } else {
+          const chip = document.createElement("span");
+          chip.className = "chip warn";
+          chip.textContent = "解析中";
+          chips.appendChild(chip);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "row";
+        actions.style.marginTop = "0.35rem";
+
+        if (track.status === "ok" && track.data?.url) {
+          const dl = document.createElement("button");
+          dl.type = "button";
+          dl.className = "btn-download btn-sm";
+          dl.textContent = "下载";
+          dl.disabled = busy;
+          dl.addEventListener("click", () => downloadOne(track));
+          actions.appendChild(dl);
+
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "btn-ghost btn-sm";
+          open.textContent = "直链";
+          open.addEventListener("click", () => {
+            window.open(track.data.url, "_blank", "noopener,noreferrer");
+          });
+          actions.appendChild(open);
+
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.preload = "none";
+          audio.src = track.data.url;
+          body.append(title, artist, urlHint, chips, actions, audio);
+        } else {
+          body.append(title, artist, urlHint, chips, actions);
+        }
+
+        item.append(pick, cover, body);
+        listEl.appendChild(item);
+      }
+
+      resultEl.classList.toggle("show", tracks.length > 0);
+      updateSummary();
+    }
+
+    async function parseOne(sourceUrl) {
+      const res = await fetch(`${API}?url=${encodeURIComponent(sourceUrl)}`);
+      if (!res.ok) throw new Error(`接口 HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.code !== 200 || !json.data?.url) {
+        throw new Error(json.msg || "未返回音频地址");
+      }
+      // CDN 会按 Referer 防盗链：浏览器 localhost 探测常 403。
+      // 解析以接口返回为准；Electron 主进程会改写 Referer，下载/试听再校验。
+      return json.data;
+    }
+
+    async function mapPool(items, limit, worker) {
+      const results = new Array(items.length);
+      let next = 0;
+      async function run() {
+        while (next < items.length) {
+          const i = next++;
+          results[i] = await worker(items[i], i);
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+      return results;
+    }
+
+    async function parseAll() {
+      if (busy) return;
+      const urls = extractUrls(input.value);
+      if (!urls.length) {
+        setStatus("未识别到汽水/抖音音乐链接。可多行粘贴 https://qishui.douyin.com/s/... 链接。", "error");
+        tracks = [];
+        renderList();
+        setProgress(0, 0);
+        return;
+      }
+
+      busy = true;
+      parseBtn.disabled = true;
+      batchDownloadBtn.disabled = true;
+      tracks = urls.map((sourceUrl, i) => ({
+        id: `t${i}-${Date.now()}`,
+        sourceUrl,
+        status: "pending",
+        selected: false,
+      }));
+      renderList();
+      setProgress(0, urls.length);
+      setStatus(`识别到 ${urls.length} 条链接，开始解析…`);
+
+      let done = 0;
+      let ok = 0;
+      let fail = 0;
+
+      await mapPool(tracks, CONCURRENCY, async (track) => {
+        try {
+          track.data = await parseOne(track.sourceUrl);
+          track.status = "ok";
+          track.selected = true;
+          ok++;
+        } catch (err) {
+          track.status = "error";
+          track.error = err.message || String(err);
+          track.selected = false;
+          fail++;
+        }
+        done++;
+        setProgress(done, urls.length);
+        setStatus(`解析中 ${done}/${urls.length} · 成功 ${ok} · 失败 ${fail}`);
+        renderList();
+      });
+
+      busy = false;
+      parseBtn.disabled = false;
+      renderList();
+      setProgress(urls.length, urls.length);
+      const type = fail === 0 ? "ok" : ok === 0 ? "error" : "warn";
+      setStatus(`解析完成：成功 ${ok}，失败 ${fail}。可勾选后批量下载。`, type);
+    }
+
+    function triggerSave(blob, filename) {
+      const a = document.createElement("a");
+      const obj = URL.createObjectURL(blob);
+      a.href = obj;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(obj), 1500);
+    }
+
+    async function downloadBlob(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`);
+      return res.blob();
+    }
+
+    async function downloadOne(track) {
+      if (!track?.data?.url || busy) return;
+      busy = true;
+      renderList();
+      setStatus(`正在下载：${filenameOf(track.data)}`);
+      try {
+        const blob = await downloadBlob(track.data.url);
+        triggerSave(blob, filenameOf(track.data));
+        setStatus(`已开始下载：${filenameOf(track.data)}`, "ok");
+      } catch (err) {
+        setStatus(`下载失败：${err.message || err}`, "error");
+      } finally {
+        busy = false;
+        renderList();
+      }
+    }
+
+    function uniqueZipName(baseName, used) {
+      if (!used.has(baseName)) {
+        used.add(baseName);
+        return baseName;
+      }
+      const m = baseName.match(/^(.*?)(\.[^.]+)?$/);
+      const stem = m?.[1] || baseName;
+      const ext = m?.[2] || "";
+      let i = 2;
+      let next = `${stem} (${i})${ext}`;
+      while (used.has(next)) {
+        i++;
+        next = `${stem} (${i})${ext}`;
+      }
+      used.add(next);
+      return next;
+    }
+
+    function zipStamp() {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    }
+
+    async function downloadSelected() {
+      const selected = tracks.filter((t) => t.status === "ok" && t.selected && t.data?.url);
+      if (!selected.length || busy) return;
+      if (typeof JSZip === "undefined") {
+        setStatus("JSZip 未加载，请检查网络后刷新页面。", "error");
+        return;
+      }
+
+      busy = true;
+      parseBtn.disabled = true;
+      batchDownloadBtn.disabled = true;
+      renderList();
+      setProgress(0, selected.length + 1);
+
+      const zip = new JSZip();
+      const usedNames = new Set();
+      let done = 0;
+      let ok = 0;
+      let fail = 0;
+
+      for (const track of selected) {
+        const name = uniqueZipName(filenameOf(track.data), usedNames);
+        setStatus(`打包中 ${done + 1}/${selected.length}：${name}`);
+        try {
+          const blob = await downloadBlob(track.data.url);
+          zip.file(name, blob);
+          ok++;
+        } catch (err) {
+          fail++;
+          console.warn("download failed", track.sourceUrl, err);
+        }
+        done++;
+        setProgress(done, selected.length + 1);
+      }
+
+      if (ok === 0) {
+        busy = false;
+        parseBtn.disabled = false;
+        renderList();
+        setStatus("没有成功拉取到任何音频，未生成压缩包。", "error");
+        return;
+      }
+
+      setStatus(`正在生成 ZIP（${ok} 首）…`);
+      try {
+        const zipBlob = await zip.generateAsync(
+          { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
+          (meta) => {
+            const packProgress = done + (meta.percent / 100);
+            setProgress(packProgress, selected.length + 1);
+          }
+        );
+        const zipName = `音乐_${ok}首_${zipStamp()}.zip`;
+        triggerSave(zipBlob, zipName);
+        setProgress(selected.length + 1, selected.length + 1);
+        const type = fail === 0 ? "ok" : "warn";
+        setStatus(`已下载压缩包：${zipName}${fail ? `（另有 ${fail} 首失败未打入）` : ""}`, type);
+      } catch (err) {
+        setStatus(`生成 ZIP 失败：${err.message || err}`, "error");
+      } finally {
+        busy = false;
+        parseBtn.disabled = false;
+        renderList();
+      }
+    }
+
+    document.getElementById("fillDemoBtn").addEventListener("click", () => {
+      input.value = DEMO;
+      setStatus("已填入示例，可再粘贴更多链接后点「批量解析」。");
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      if (busy) return;
+      input.value = "";
+      tracks = [];
+      renderList();
+      setProgress(0, 0);
+      setStatus("");
+    });
+
+    selectAllEl.addEventListener("change", () => {
+      const on = selectAllEl.checked;
+      for (const t of tracks) {
+        if (t.status === "ok") t.selected = on;
+      }
+      renderList();
+    });
+
+    parseBtn.addEventListener("click", parseAll);
+    batchDownloadBtn.addEventListener("click", downloadSelected);
+    input.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") parseAll();
+    });
+
+    const q = new URLSearchParams(location.search).get("url");
+    if (q) {
+      input.value = q;
+      parseAll();
+    }
+  </script>
+</body>
+</html>
