@@ -67,6 +67,26 @@ function setupDouyinMediaHeaders() {
   })
 }
 
+/** 酷我搜索/直链接口无 CORS，给渲染进程补上允许跨域读取 */
+function setupKuwoCors() {
+  const filter = {
+    urls: [
+      '*://search.kuwo.cn/*',
+      '*://antiserver.kuwo.cn/*',
+      '*://*.kuwo.cn/*',
+      '*://*.sycdn.kuwo.cn/*',
+    ],
+  }
+
+  session.defaultSession.webRequest.onHeadersReceived(filter, (details, callback) => {
+    const responseHeaders = { ...details.responseHeaders }
+    responseHeaders['Access-Control-Allow-Origin'] = ['*']
+    responseHeaders['Access-Control-Allow-Methods'] = ['GET,HEAD,POST,OPTIONS']
+    responseHeaders['Access-Control-Allow-Headers'] = ['*']
+    callback({ responseHeaders })
+  })
+}
+
 async function createWindow() {
   win = new BrowserWindow({
     title: '下载神器',
@@ -108,6 +128,7 @@ async function createWindow() {
 
 app.whenReady().then(() => {
   setupDouyinMediaHeaders()
+  setupKuwoCors()
   createWindow()
 })
 

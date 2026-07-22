@@ -13,6 +13,14 @@
     "build:win": "vite build && electron-builder --win --x64 --publish never",
     "build:mac": "vite build && electron-builder --mac --publish never",
     "build:all": "vite build && electron-builder --mac --win --x64 --publish never",
+    "mobile:setup": "bash scripts/setup-mobile.sh",
+    "mobile:sync": "bash -lc 'source scripts/mobile-env.sh && npx cap sync'",
+    "build:android": "bash -lc 'source scripts/mobile-env.sh && npx cap sync android && cd android && ./gradlew assembleDebug'",
+    "android:signing": "bash scripts/android-signing.sh",
+    "build:android:release": "bash scripts/android-signing.sh && bash -lc 'source scripts/mobile-env.sh && npx cap sync android && cd android && ./gradlew assembleRelease'",
+    "build:ios": "bash -lc 'source scripts/mobile-env.sh && npx cap sync ios'",
+    "open:android": "bash -lc 'source scripts/mobile-env.sh && npx cap open android'",
+    "open:ios": "bash -lc 'source scripts/mobile-env.sh && npx cap open ios'",
     "preview": "vite preview",
     "pretest": "vite build --mode=test",
     "test": "vitest run",
@@ -20,9 +28,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
+    "@capacitor/ios": "^7.4.2",
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.2",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.16",

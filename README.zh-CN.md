@@ -8,7 +8,7 @@
 
 - 卡密验证后进入下载页
 - 管理员可生成带期限的临时卡密
-- 支持批量解析汽水 / 抖音音乐分享链接
+- 支持汽水分享链接批量解析，以及按歌名搜索（酷我音源）下载
 - 支持试听、单曲下载、批量打包 ZIP
 - 安装后软件名：**下载神器**
 - 支持一键打包 Windows / macOS
@@ -34,6 +34,12 @@ npm run dev
 | `npm run build:win` | 打包 Windows x64 安装包（NSIS） |
 | `npm run build:mac` | 打包 macOS（dmg / zip） |
 | `npm run build:all` | 一键打包 Windows + macOS |
+| `npm run mobile:sync` | 同步 `public/` 到 Android / iOS 工程 |
+| `npm run build:android` | 打包 Android 调试版 APK（需 JDK + Android SDK） |
+| `npm run build:android:release` | 打包 Android 正式版 APK |
+| `npm run build:ios` | 同步 iOS 工程（需在 Xcode 中归档） |
+| `npm run open:android` | 用 Android Studio 打开 |
+| `npm run open:ios` | 用 Xcode 打开 |
 | `npm run preview` | 本地预览生产构建 |
 | `npm run typecheck` | TypeScript 类型检查 |
 
@@ -42,6 +48,39 @@ npm run dev
 - Windows：`下载神器_0.0.1.exe`
 - macOS：`下载神器_0.0.1.dmg`
 
+## 移动端打包（Android / iOS）
+
+桌面端用 Electron，移动端用 **Capacitor** 封装同一套 `public/` 页面。
+
+**一键安装/检查环境：**
+
+```sh
+npm run mobile:setup
+```
+
+会自动下载 JDK 21 到项目 `.tools/`（无需 sudo），并检查 Android SDK、Xcode。
+
+**环境要求：**
+
+| 平台 | 需要 | 你这台机器 |
+|------|------|------------|
+| Android | JDK 21、Android SDK | JDK 已装到 `.tools/jdk-21`；SDK 在 `~/Library/Android/sdk` |
+| iOS | macOS、Xcode、CocoaPods | Xcode 26.5、CocoaPods 已就绪 |
+
+**打包命令：**
+
+```sh
+npm run mobile:setup          # 安装/检查环境（首次运行）
+npm run mobile:sync           # 同步 public/ 到原生工程
+npm run build:android         # Android 调试 APK
+npm run build:android:release # Android 正式 APK（需签名）
+npm run build:ios             # 同步 iOS 工程
+npm run open:ios              # Xcode 归档上架
+npm run open:android          # Android Studio
+```
+
+Android 调试包输出：`android/app/build/outputs/apk/debug/app-debug.apk`
+
 ## 项目结构
 
 ```tree
@@ -49,6 +88,9 @@ npm run dev
 ├── electron/                  主进程与 preload
 │   ├── main/                  窗口入口、CDN Referer 改写
 │   └── preload/
+├── android/                   Capacitor Android 工程
+├── ios/                       Capacitor iOS 工程
+├── capacitor.config.ts        移动端配置
 ├── public/
 │   ├── qishui-auth.html       卡密授权页（应用入口）
 │   ├── qishui-admin.html      管理员：生成临时卡密
