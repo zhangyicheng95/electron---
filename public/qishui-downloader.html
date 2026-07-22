@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>音乐下载</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,7 +37,7 @@
       width: min(880px, calc(100% - 2rem));
       margin: 0 auto;
       /* 适配刘海/沉浸式状态栏：顶部至少预留 safe-area */
-      padding: calc(3.5rem + env(safe-area-inset-top)) 0 4rem;
+      padding: calc(3.5rem + env(safe-area-inset-top, 0px)) 0 4rem;
     }
 
     .brand {
@@ -443,6 +443,8 @@
     let currentMode = "link";
     let activeTask = "";
     let stopRequested = false;
+    let taskRunSeq = 0;
+    let activeRunId = 0;
 
     function setBusyUi(on) {
       busy = on;
@@ -468,22 +470,34 @@
       batchDownloadBtn.disabled = on || tracks.filter((t) => t.status === "ok" && t.selected).length === 0;
     }
 
+    function isRunActive(runId) {
+      return runId !== 0 && runId === activeRunId;
+    }
+
     function startTask(type) {
       activeTask = type;
       stopRequested = false;
+      activeRunId = ++taskRunSeq;
       setBusyUi(true);
+      return activeRunId;
     }
 
-    function finishTask() {
+    function finishTask(runId = 0) {
+      if (runId && runId !== activeRunId) return;
       activeTask = "";
       stopRequested = false;
+      activeRunId = 0;
       setBusyUi(false);
     }
 
     function requestStop() {
       if (!busy) return;
       stopRequested = true;
-      setStatus("正在停止当前任务，请稍候…", "warn");
+      // 立即失效当前任务并解锁界面；晚到的网络结果将被忽略
+      activeRunId = 0;
+      activeTask = "";
+      setBusyUi(false);
+      setStatus("已请求停止，正在取消中…", "warn");
     }
 
     function switchMode(mode) {
@@ -961,7 +975,7 @@
         return;
       }
 
-      startTask("parse");
+      const runId = startTask("parse");
       tracks = urls.map((sourceUrl, i) => ({
         id: `t${i}-${Date.now()}`,
         sourceUrl,
@@ -977,26 +991,32 @@
       let fail = 0;
 
       await mapPool(tracks, CONCURRENCY, async (track) => {
-        if (stopRequested) return;
+        if (!isRunActive(runId) || stopRequested) return;
         try {
-          track.data = await parseOne(track.sourceUrl);
+          const data = await parseOne(track.sourceUrl);
+          if (!isRunActive(runId) || stopRequested) return;
+          track.data = data;
           track.status = "ok";
           track.selected = true;
           ok++;
         } catch (err) {
+          if (!isRunActive(runId) || stopRequested) return;
           track.status = "error";
           track.error = err.message || String(err);
           track.selected = false;
           fail++;
         }
+        if (!isRunActive(runId) || stopRequested) return;
         done++;
         setProgress(done, urls.length);
         setStatus(`解析中 ${done}/${urls.length} · 成功 ${ok} · 失败 ${fail}`);
         renderList();
-      }, () => stopRequested);
+      }, () => stopRequested || !isRunActive(runId));
+
+      if (!isRunActive(runId)) return;
 
       const wasStopped = stopRequested;
-      finishTask();
+      finishTask(runId);
       renderList();
       setProgress(wasStopped ? done : urls.length, urls.length);
       if (wasStopped) {
@@ -1020,7 +1040,7 @@
         return;
       }
 
-      startTask("search");
+      const runId = startTask("search");
       tracks = [];
       renderList();
       setProgress(0, 1);
@@ -1034,8 +1054,9 @@
 
       try {
         const hits = await searchTracks(keyword, sourceMode);
+        if (!isRunActive(runId) || stopRequested) return;
         if (!hits.length) {
-          finishTask();
+          finishTask(runId);
           setProgress(0, 0);
           setStatus("没有搜到相关歌曲，换个关键词试试。", "warn");
           return;
@@ -1065,7 +1086,7 @@
             track.status = "error";
             track.error = "当前结果受限，请换其他版本或关键词";
           }
-          finishTask();
+          finishTask(runId);
           renderList();
           setProgress(hits.length, hits.length);
           setStatus("未找到可完整播放的版本，请尝试翻唱、现场版等关键词。", "warn");
@@ -1078,7 +1099,7 @@
         let skipped = 0;
 
         await mapPool(tracks, CONCURRENCY, async (track) => {
-          if (stopRequested) return;
+          if (!isRunActive(runId) || stopRequested) return;
           if (track.hit?.vipOnly) {
             track.status = "error";
             track.error = "酷我VIP曲目，请选择标有「可播」的其他版本";
@@ -1091,24 +1112,30 @@
             return;
           }
           try {
-            track.data = await resolveTrack(track.hit);
+            const data = await resolveTrack(track.hit);
+            if (!isRunActive(runId) || stopRequested) return;
+            track.data = data;
             track.status = "ok";
             track.selected = true;
             ok++;
           } catch (err) {
+            if (!isRunActive(runId) || stopRequested) return;
             track.status = "error";
             track.error = err.message || String(err);
             track.selected = false;
             fail++;
           }
+          if (!isRunActive(runId) || stopRequested) return;
           done++;
           setProgress(done, hits.length);
           setStatus(`解析中 ${done}/${hits.length} · 成功 ${ok} · 失败 ${fail}${skipped ? ` · 跳过VIP ${skipped}` : ""}`);
           renderList();
-        }, () => stopRequested);
+        }, () => stopRequested || !isRunActive(runId));
+
+        if (!isRunActive(runId)) return;
 
         const wasStopped = stopRequested;
-        finishTask();
+        finishTask(runId);
         renderList();
         setProgress(wasStopped ? done : hits.length, hits.length);
         if (wasStopped) {
@@ -1121,7 +1148,8 @@
           type
         );
       } catch (err) {
-        finishTask();
+        if (!isRunActive(runId)) return;
+        finishTask(runId);
         setProgress(0, 0);
         setStatus(`搜索失败：${err.message || err}`, "error");
       }

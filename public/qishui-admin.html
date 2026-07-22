@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>下载神器 · 管理</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,6 +19,7 @@
       --card: rgba(21, 32, 25, 0.72);
       --glow: rgba(61, 255, 154, 0.18);
       --header-h: 58px;
+      --safe-top: env(safe-area-inset-top, 0px);
     }
 
     * { box-sizing: border-box; }
@@ -39,13 +40,13 @@
     }
 
     .header {
-      height: var(--header-h);
+      height: calc(var(--header-h) + var(--safe-top));
       flex: 0 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 1rem;
-      padding: 0 1rem;
+      padding: var(--safe-top) 1rem 0;
       border-bottom: 1px solid var(--line);
       background: rgba(12, 18, 16, 0.72);
       backdrop-filter: blur(12px);
